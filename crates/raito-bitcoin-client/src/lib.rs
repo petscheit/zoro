@@ -17,7 +17,7 @@ use tracing::{debug, info};
 
 /// Error types for Bitcoin RPC client operations
 #[derive(Error, Debug)]
-pub enum BitcoinClientError {
+pub enum ZcashClientError {
     /// RPC client errors
     #[error("RPC client error: {0}")]
     RpcClient(#[from] jsonrpsee::core::client::Error),
@@ -40,22 +40,22 @@ pub const CHAIN_HEIGHT_UPDATE_INTERVAL: Duration = Duration::from_secs(10);
 
 /// Bitcoin RPC client
 #[derive(Debug)]
-pub struct BitcoinClient {
+pub struct ZcashClient {
     client: HttpClient,
     chain_height: u32,
     backoff: backoff::ExponentialBackoff,
 }
 
-impl BitcoinClient {
-    /// Create a new Bitcoin RPC client with default retry settings (exponential backoff)
-    pub fn new(url: String, userpwd: Option<String>) -> Result<Self, BitcoinClientError> {
+impl ZcashClient {
+    /// Create a new Zcash RPC client with default retry settings (exponential backoff)
+    pub fn new(url: String, userpwd: Option<String>) -> Result<Self, ZcashClientError> {
         let mut headers = HeaderMap::new();
         if let Some(userpwd) = userpwd {
             let creds = general_purpose::STANDARD.encode(userpwd);
             headers.insert(
                 "Authorization",
                 HeaderValue::from_str(&format!("Basic {creds}"))
-                    .map_err(|_| BitcoinClientError::InvalidHeader)?,
+                    .map_err(|_| ZcashClientError::InvalidHeader)?,
             );
         };
 
@@ -71,24 +71,11 @@ impl BitcoinClient {
         })
     }
 
-    async fn request_decode<T: Decodable>(
-        &self,
-        method: &str,
-        params: ArrayParams,
-    ) -> Result<T, BitcoinClientError> {
-        request_with_retry(self.backoff.clone(), || async {
-            let res_hex: String = self.client.request(method, params.clone()).await?;
-            let res_bytes = hex::decode(&res_hex)?;
-            bitcoin::consensus::deserialize(&res_bytes).map_err(Into::into)
-        })
-        .await
-    }
-
     async fn request<T: DeserializeOwned>(
         &self,
         method: &str,
         params: ArrayParams,
-    ) -> Result<T, BitcoinClientError> {
+    ) -> Result<T, ZcashClientError> {
         request_with_retry(self.backoff.clone(), || async {
             self.client
                 .request(method, params.clone())
@@ -99,7 +86,7 @@ impl BitcoinClient {
     }
 
     /// Get block hash by height
-    pub async fn get_block_hash(&self, height: u32) -> Result<BlockHash, BitcoinClientError> {
+    pub async fn get_block_hash(&self, height: u32) -> Result<BlockHash, ZcashClientError> {
         self.request("getblockhash", rpc_params![height]).await
     }
 
@@ -107,8 +94,8 @@ impl BitcoinClient {
     pub async fn get_block_header(
         &self,
         hash: &BlockHash,
-    ) -> Result<BlockHeader, BitcoinClientError> {
-        self.request_decode("getblockheader", rpc_params![hash.to_string(), false])
+    ) -> Result<BlockHeader, ZcashClientError> {
+        self.request::<BlockHeader>("getblockheader", rpc_params![hash.to_string(), false])
             .await
     }
 
@@ -116,7 +103,7 @@ impl BitcoinClient {
     pub async fn get_block_header_ex(
         &self,
         hash: &BlockHash,
-    ) -> Result<GetBlockHeaderResult, BitcoinClientError> {
+    ) -> Result<GetBlockHeaderResult, ZcashClientError> {
         self.request("getblockheader", rpc_params![hash.to_string(), true])
             .await
     }
@@ -125,7 +112,7 @@ impl BitcoinClient {
     pub async fn get_block_header_by_height(
         &self,
         height: u32,
-    ) -> Result<(BlockHeader, BlockHash), BitcoinClientError> {
+    ) -> Result<(BlockHeader, BlockHash), ZcashClientError> {
         let hash = self.get_block_hash(height).await?;
         let header = self.get_block_header(&hash).await?;
         Ok((header, hash))
@@ -136,25 +123,27 @@ impl BitcoinClient {
         &self,
         txid: &Txid,
         block_hash: &BlockHash,
-    ) -> Result<Transaction, BitcoinClientError> {
-        self.request_decode(
-            "getrawtransaction",
-            rpc_params![txid.to_string(), false, block_hash.to_string()],
-        )
-        .await
+    ) -> Result<Transaction, ZcashClientError> {
+        unimplemented!();
+        // self.request(
+        //     "getrawtransaction",
+        //     rpc_params![txid.to_string(), false, block_hash.to_string()],
+        // )
+        // .await
     }
 
     /// Get transaction inclusion proof
     pub async fn get_transaction_inclusion_proof(
         &self,
         txid: &Txid,
-    ) -> Result<MerkleBlock, BitcoinClientError> {
-        self.request_decode("gettxoutproof", rpc_params![[txid.to_string()]])
-            .await
+    ) -> Result<MerkleBlock, ZcashClientError> {
+        unimplemented!();
+        // self.request("gettxoutproof", rpc_params![[txid.to_string()]])
+        //     .await
     }
 
     /// Get current chain height
-    pub async fn get_chain_height(&self) -> Result<u32, BitcoinClientError> {
+    pub async fn get_chain_height(&self) -> Result<u32, ZcashClientError> {
         let result: u64 = self.request("getblockcount", rpc_params![]).await?;
         Ok(result as u32)
     }
@@ -165,7 +154,7 @@ impl BitcoinClient {
         &mut self,
         height: u32,
         lag: u32,
-    ) -> Result<(BlockHeader, BlockHash), BitcoinClientError> {
+    ) -> Result<(BlockHeader, BlockHash), ZcashClientError> {
         while height > self.chain_height {
             self.chain_height = self.get_chain_height().await?.saturating_sub(lag);
             if height <= self.chain_height {
@@ -184,10 +173,10 @@ impl BitcoinClient {
 async fn request_with_retry<F, Fut, T>(
     backoff: backoff::ExponentialBackoff,
     operation: F,
-) -> Result<T, BitcoinClientError>
+) -> Result<T, ZcashClientError>
 where
     F: Fn() -> Fut,
-    Fut: std::future::Future<Output = Result<T, BitcoinClientError>>,
+    Fut: std::future::Future<Output = Result<T, ZcashClientError>>,
 {
     use backoff::{future::retry_notify, Error};
 
@@ -214,10 +203,10 @@ where
 }
 
 /// Determines if an error should be retried - only retry HTTP errors (except bad request)
-fn is_retryable_error(err: &BitcoinClientError) -> bool {
+fn is_retryable_error(err: &ZcashClientError) -> bool {
     match err {
         // Only retry RPC client errors that are HTTP-related (transport, timeouts, server errors)
-        BitcoinClientError::RpcClient(rpc_err) => {
+        ZcashClientError::RpcClient(rpc_err) => {
             use jsonrpsee::core::client::Error as RpcError;
             match rpc_err {
                 // Only retry transport errors and timeouts (HTTP-level issues)
