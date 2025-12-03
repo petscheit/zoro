@@ -1,5 +1,5 @@
 [package]
-name = "raito-bitcoin-client"
+name = "raito-zcash-client"
 version = "0.1.0"
 edition = "2021"
 

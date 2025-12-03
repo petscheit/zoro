@@ -5,15 +5,18 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient};
 use jsonrpsee::rpc_params;
+use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::time::Duration;
 use thiserror::Error;
 use tracing::{debug, info};
 use zcash_primitives::block::{BlockHash, BlockHeader};
-use zcash_primitives::transaction::Transaction;
+use zcash_primitives::transaction::Transaction as ZcashTransaction;
 use zcash_protocol::consensus::{BlockHeight, BranchId};
 use zcash_protocol::{consensus::Network, TxId};
+pub mod types;
+
 
 /// Error types for Bitcoin RPC client operations
 #[derive(Error, Debug)]

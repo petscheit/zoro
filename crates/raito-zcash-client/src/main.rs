@@ -1,4 +1,4 @@
-use raito_bitcoin_client::ZcashClient;
+use raito_zcash_client::ZcashClient;
 
 #[tokio::main]
 async fn main() {
