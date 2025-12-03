@@ -7,15 +7,13 @@ use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient};
 use jsonrpsee::rpc_params;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use zcash_primitives::block::{BlockHash, BlockHeader};
-use zcash_primitives::transaction::Transaction;
-use zcash_protocol::{
-    consensus::{BlockHeight, BranchId, Network},
-    TxId,
-};
 use std::time::Duration;
 use thiserror::Error;
 use tracing::{debug, info};
+use zcash_primitives::block::{BlockHash, BlockHeader};
+use zcash_primitives::transaction::Transaction;
+use zcash_protocol::consensus::{BlockHeight, BranchId};
+use zcash_protocol::{consensus::Network, TxId};
 
 /// Error types for Bitcoin RPC client operations
 #[derive(Error, Debug)]
@@ -76,14 +74,18 @@ impl ZcashClient {
             .build(url)?;
 
         let backoff = backoff::ExponentialBackoff::default();
-        
+
         let chain_info = Self::get_chain_info(client.clone(), backoff.clone()).await?;
         let network = match chain_info["chain"].as_str().unwrap_or("unknown") {
             "main" => Network::MainNetwork,
             "test" => Network::TestNetwork,
-            _ => return Err(ZcashClientError::UnsupportedNetwork("unknown network".to_string())),
+            _ => {
+                return Err(ZcashClientError::UnsupportedNetwork(
+                    "unknown network".to_string(),
+                ))
+            }
         };
-        
+
         Ok(Self {
             client,
             backoff: backoff.clone(),
@@ -93,15 +95,17 @@ impl ZcashClient {
     }
 
     /// Get chain info, needed to determine the network
-    async fn get_chain_info(client: HttpClient, backoff: backoff::ExponentialBackoff) -> Result<Value, ZcashClientError> {
-        let blockchain_info: Value =
-            request_with_retry(backoff, || async {
-                client
-                    .request("getblockchaininfo", rpc_params![])
-                    .await
-                    .map_err(Into::into)
-            })
-            .await?;
+    async fn get_chain_info(
+        client: HttpClient,
+        backoff: backoff::ExponentialBackoff,
+    ) -> Result<Value, ZcashClientError> {
+        let blockchain_info: Value = request_with_retry(backoff, || async {
+            client
+                .request("getblockchaininfo", rpc_params![])
+                .await
+                .map_err(Into::into)
+        })
+        .await?;
         Ok(blockchain_info)
     }
 
@@ -165,26 +169,28 @@ impl ZcashClient {
     }
 
     /// Get transaction by txid and hash of the block containing the transaction
-    pub async fn get_transaction(
-        &self,
-        txid: &TxId,
-    ) -> Result<Transaction, ZcashClientError> {
-        unimplemented!();
-        // let header_info: serde_json::Value = self
-        //     .request("getblockheader", rpc_params![block_hash, true])
-        //     .await?;
+    pub async fn get_transaction(&self, txid: &[u8]) -> Result<Transaction, ZcashClientError> {
+        // we need to pass the txid in little endian format to the rpc
+        let mut txid_le = [0u8; 32];
+        txid_le.copy_from_slice(txid);
+        txid_le.reverse();
+        let txid = TxId::read(&mut txid_le.as_slice()).unwrap();
 
-        // let block_height = decode_block_height(&header_info)?;
+        // get raw tx from rpc in json mode
+        let tx: Value = self
+            .request("getrawtransaction", rpc_params![txid.to_string(), 1])
+            .await?;
 
-        // let consensus_branch_id =
-        //     BranchId::for_height(&self.network, BlockHeight::from(block_height));
+        // derive branch if from network + block height to decode tx version correctly
+        let block_number: u32 = tx["height"].as_u64().unwrap() as u32;
+        let consensus_branch_id =
+            BranchId::for_height(&self.network, BlockHeight::from(block_number));
 
-        // let raw_transaction_bytes = hex::decode(raw_transaction)?;
-        // let mut reader = raw_transaction_bytes.as_slice();
-        // let transaction =
-        //     Transaction::read(&mut reader, consensus_branch_id)
-        //         .map_err(ZcashClientError::ZcashTransactionRead)?;
-        // Ok(transaction)
+        // decode tx from hex
+        let tx_hex = hex::decode(tx["hex"].as_str().unwrap()).unwrap();
+        let transaction = Transaction::read(&mut tx_hex.as_slice(), consensus_branch_id).unwrap();
+
+        Ok(transaction)
     }
 
     /// Get transaction inclusion proof
@@ -224,15 +230,16 @@ impl ZcashClient {
 }
 
 fn decode_block_height(header_info: &serde_json::Value) -> Result<u32, ZcashClientError> {
-    header_info.get("height")
+    header_info
+        .get("height")
         .and_then(|h| h.as_u64())
         .map(|h| h as u32)
-        .ok_or_else(|| ZcashClientError::ZcashBlockHeaderRead(
-            std::io::Error::new(
+        .ok_or_else(|| {
+            ZcashClientError::ZcashBlockHeaderRead(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "missing or invalid block height in getblockheader response",
-            )
-        ))
+            ))
+        })
 }
 
 /// Execute a request with retry logic using exponential backoff
@@ -287,49 +294,5 @@ fn is_retryable_error(err: &ZcashClientError) -> bool {
         }
         // Don't retry any other error types (hex decode, bitcoin deserialization, header issues)
         _ => false,
-    }
-}
-
-
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_get_transactions() {
-        let client = ZcashClient::new(
-            "https://go.getblock.io/ac2f0972c36143af84a242ea1e740dfa".to_string(),
-            None
-        )
-        .await
-        .unwrap();
-
-        let txids_hex = [
-            "55ab20ae2d528fd612ed55b419950ebac20f4c59ea841b7fe5db97f9c3e7e206",
-            "a6cabf193af5066654d9929e54ea6bc1f794c5d07d7247a3893eeef4e5bfe17f",
-            "b2aa4c149a451d75fff16d0b97291dab06cb2788ebc44be3cfeb61b847446c2b",
-            "c61e5ce69c9892ee36602d6d31458f381750d52983fc471f874f95f57d9afeab",
-            "84832e66f3261737b84da806f62bc07dce03e3002bef412766faa3d123f066e1",
-            "ac694dd10970909bf1bfc6bd71f5e6c924b174a5ddf6529f5ba3b8e721724f9c",
-            "381b65eb3fa04c1c78e73d4488b7e0b02f0469e5bd8e222f84c7896410e966dd",
-            "0a5803ee986c48fb9b8c8d949ee6b4e8f48c2d81a94fb36bbf168d66753a0d41",
-        ];
-
-        for txid_hex in txids_hex {
-            // Remove optional "0x" and parse hex string to bytes
-            let cleaned = txid_hex.trim_start_matches("0x");
-            let txid_bytes = hex::decode(cleaned).expect("Invalid txid hex");
-            let mut txid_arr = [0u8; 32];
-            txid_arr.copy_from_slice(&txid_bytes);
-            let txid = TxId::from_bytes(txid_arr);
-
-            // Placeholder block hash (use real block hashes if available)
-            let block_hash = zcash_primitives::block::BlockHash([0u8; 32]);
-
-            let transaction = client.get_transaction(&txid, &block_hash).await;
-            match transaction {
-                Ok(tx) => println!("{:?}", tx),
-                Err(e) => println!("Failed for txid {}: {:?}", txid_hex, e),
-            }
-        }
     }
 }
