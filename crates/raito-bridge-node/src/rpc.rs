@@ -1,7 +1,7 @@
 //! HTTP RPC server providing REST endpoints for MMR proof generation and block count queries.
 
 use accumulators::hasher::stark_blake::StarkBlakeHasher;
-use raito_bitcoin_client::BitcoinClient;
+use raito_bitcoin_client::ZcashClient;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tracing::{error, info};
@@ -63,11 +63,11 @@ pub struct RpcServer {
 pub struct AppState {
     mmr: Arc<BlockMMR>,
     store: Arc<AppStore>,
-    bitcoin_client: Arc<BitcoinClient>,
+    bitcoin_client: Arc<ZcashClient>,
 }
 
 impl AppState {
-    pub fn new(config: RpcConfig) -> Result<Self, anyhow::Error> {
+    pub async fn new(config: RpcConfig) -> Result<Self, anyhow::Error> {
         let mmr_id = Some(config.mmr_id.clone());
         let store = Arc::new(AppStore::multiple_concurrent_readers(
             &config.mmr_db_path,
@@ -75,8 +75,8 @@ impl AppState {
         ));
         let hasher = StarkBlakeHasher::default();
         let mmr = BlockMMR::new(store.clone(), Arc::new(hasher), mmr_id);
-        let bitcoin_client =
-            BitcoinClient::new(config.rpc_url.clone(), config.rpc_userpwd.clone())?;
+        let bitcoin_client = ZcashClient::new(config.rpc_url.clone(), config.rpc_userpwd.clone())
+            .await?;
         Ok(Self {
             mmr: Arc::new(mmr),
             bitcoin_client: Arc::new(bitcoin_client),
@@ -97,6 +97,7 @@ impl RpcServer {
         info!("Starting RPC server on {}", self.config.rpc_host);
 
         let app_state = AppState::new(self.config.clone())
+            .await
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
         let app = Router::new()

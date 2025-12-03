@@ -7,7 +7,7 @@ use raito_spv_mmr::block_mmr::BlockMMR;
 use tokio::sync::broadcast;
 use tracing::{error, info};
 
-use raito_bitcoin_client::BitcoinClient;
+use raito_bitcoin_client::ZcashClient;
 
 use crate::{chain_state::ChainStateManager, store::AppStore};
 
@@ -44,8 +44,11 @@ impl Indexer {
     async fn run_inner(&mut self) -> Result<(), anyhow::Error> {
         info!("Block indexer started");
 
-        let mut bitcoin_client =
-            BitcoinClient::new(self.config.rpc_url.clone(), self.config.rpc_userpwd.clone())?;
+        let mut bitcoin_client = ZcashClient::new(
+            self.config.rpc_url.clone(),
+            self.config.rpc_userpwd.clone(),
+        )
+        .await?;
         info!("Bitcoin RPC client initialized");
 
         // We need to specify mmr_id to have deterministic keys in the database

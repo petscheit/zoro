@@ -14,7 +14,9 @@ tokio = { version = "1.36", features = ["full"] }
 reqwest = { version = "0.12", features = ["json", "gzip", "brotli", "zstd"] }
 async-trait = "0.1"
 
-# Bitcoin
+# zcash
+zcash_primitives = { version = "0.26.1" }
+zcash_protocol = { version = "0.7.1" }
 bitcoin = { version = "0.32.6", features = ["serde"] }
 bitcoincore-rpc-json = "0.19.0"
 

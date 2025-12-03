@@ -7,7 +7,7 @@ use bitcoin::{consensus, MerkleBlock, Txid};
 use bzip2::read::BzDecoder;
 use bzip2::write::BzEncoder;
 use bzip2::Compression;
-use raito_bitcoin_client::BitcoinClient;
+use raito_bitcoin_client::ZcashClient;
 use raito_spv_mmr::block_mmr::BlockInclusionProof;
 use std::io::Read;
 use tracing::info;
@@ -223,23 +223,24 @@ pub async fn fetch_transaction_proof(
     bitcoin_rpc_userpwd: Option<String>,
 ) -> Result<TransactionInclusionProof, anyhow::Error> {
     info!("Fetching transaction proof for {} ...", txid);
-    let bitcoin_client = BitcoinClient::new(bitcoin_rpc_url, bitcoin_rpc_userpwd)?;
-    let MerkleBlock { header, txn } = bitcoin_client
-        .get_transaction_inclusion_proof(&txid)
-        .await?;
+    unimplemented!();
+    // let bitcoin_client = ZcashClient::new(bitcoin_rpc_url, bitcoin_rpc_userpwd).await?;
+    // let MerkleBlock { header, txn } = bitcoin_client
+    //     .get_transaction_inclusion_proof(&txid)
+    //     .await?;
 
-    let block_hash = header.block_hash();
-    let transaction = bitcoin_client.get_transaction(&txid, &block_hash).await?;
+    // let block_hash = header.block_hash();
+    // let transaction = bitcoin_client.get_transaction(&txid, &block_hash).await?;
 
-    let block_header_ex = bitcoin_client.get_block_header_ex(&block_hash).await?;
-    let block_height = block_header_ex.height;
+    // let block_header_ex = bitcoin_client.get_block_header_ex(&block_hash).await?;
+    // let block_height = block_header_ex.height;
 
-    Ok(TransactionInclusionProof {
-        transaction,
-        transaction_proof: consensus::encode::serialize(&txn),
-        block_header: header,
-        block_height: block_height as u32,
-    })
+    // Ok(TransactionInclusionProof {
+    //     transaction,
+    //     transaction_proof: consensus::encode::serialize(&txn),
+    //     block_header: header,
+    //     block_height: block_height as u32,
+    // })
 }
 
 /// Fetch the block MMR inclusion proof from the Raito bridge RPC
