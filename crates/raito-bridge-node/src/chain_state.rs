@@ -71,10 +71,7 @@ impl ChainStateManager {
             } else {
                 self.current_state.epoch_start_time
             };
-            
-
-            let n_bits = u32::from_be_bytes(block_header.difficulty_threshold.bytes_in_display_order());
-        
+                    
             ChainState {
                 block_height,
                 total_work: self.current_state.total_work, // + block_header.difficulty_threshold, // Question Paul: how do we compute this?
@@ -98,13 +95,11 @@ impl ChainStateManager {
         ChainState {
             block_height: 0,
             total_work: 0x2000,
-            best_block_hash: Hash::from_hex(
-                "0000000000000000000000000000000000000000000000000000000000000000",
-            )
-            .unwrap(),
-            n_bits: 0x1f07ffff,
-            epoch_start_time: 1477634160,
-            prev_timestamps: vec![1477634160],
+            best_block_hash: Hash::from_hex("00040fe8ec8471911baa1db1266ea15dd06b4a8a5c453883c000b031973dce08").unwrap(),
+            current_target: Target::from_hex("0007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap(),
+            prev_timestamps: vec![1477641360],
+            epoch_start_time: 1477641360,
+            pow_target_history:  [Target::from_hex("0007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap(); 17].to_vec(),
         }
     }
 }

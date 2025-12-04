@@ -4,6 +4,7 @@
 
 use cairo_air::CairoProof;
 use raito_spv_mmr::block_mmr::BlockInclusionProof;
+use stwo_prover::core::vcs::blake2_hash::Blake2sHasher;
 use zcash_client::serialize::{deserialize_header, deserialize_transaction, serialize_header, serialize_transaction};
 use serde::{Deserialize, Serialize};
 use starknet_ff::FieldElement;
@@ -48,6 +49,23 @@ pub struct CompressedSpvProof {
     pub transaction_proof: Vec<u8>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Target([u8; 32]);
+
+impl Target {
+    pub fn from_hex(hex: &str) -> anyhow::Result<Self> {
+        let bytes = hex::decode(hex)?;
+        if bytes.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid target length"));
+        }
+        Ok(Self(bytes.try_into().unwrap()))
+    }
+
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.0)
+    }
+}
+
 /// Snapshot of the consensus chain state used to validate block inclusion
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChainState {
@@ -58,11 +76,14 @@ pub struct ChainState {
     /// The hash of the best block in the chain
     pub best_block_hash: Hash,
     /// The current target difficulty
-    pub n_bits: u32,
+    pub current_target: Target,
     /// The start time (UNIX seconds) of the current difficulty epoch
-    pub epoch_start_time: u32,
-    /// The timestamps (UNIX seconds) of the previous 11 blocks
     pub prev_timestamps: Vec<u32>,
+    /// Timestamp of the block that started the current difficulty epoch (legacy field kept for
+    /// serialization compatibility)
+    pub epoch_start_time: u32,
+    /// Difficulty targets (u256) of the most recent blocks as decimal strings
+    pub pow_target_history: Vec<Target>,
 }
 
 /// Output of the bootloader program
@@ -152,40 +173,51 @@ impl ChainState {
     ///
     /// The serialization mirrors the Cairo-side little-endian encoding.
     pub fn blake2s_digest(&self) -> anyhow::Result<String> {
-        unimplemented!();
-        // let best_block_hash_words = self
-        //     .best_block_hash
-        //     .to_byte_array()
-        //     .chunks_exact(4)
-        //     .map(|chunk| u32::from_be_bytes(chunk.try_into().unwrap()))
-        //     .collect::<Vec<_>>();
+        // Construct the payload for the hash function, mirroring Cairo's word order.
+        let mut words: Vec<u32> = Vec::new();
 
-        // // Construct the payload for the hash function, all integers are little-endian
-        // let mut words = Vec::new();
-        // words.push(self.block_height);
-        // words.extend_from_slice(&split_bytes_into_words(&self.total_work.to_be_bytes()));
-        // words.extend_from_slice(&best_block_hash_words);
-        // words.extend_from_slice(&split_bytes_into_words(&self.current_target.to_be_bytes()));
-        // words.push(self.epoch_start_time);
-        // words.extend_from_slice(&self.prev_timestamps);
+        // Height
+        words.push(self.block_height);
 
-        // // Serialize to bytes, using little-endian encoding
-        // let bytes = words
-        //     .iter()
-        //     .flat_map(|word| word.to_le_bytes())
-        //     .collect::<Vec<_>>();
+        // Total work: treat u128 as a u256 with zero high half, then split into 8 big-endian u32 words.
+        let mut total_work_bytes = [0u8; 32];
+        total_work_bytes[16..].copy_from_slice(&self.total_work.to_be_bytes());
+        words.extend(split_bytes_into_words(&total_work_bytes));
 
-        // // Compute the hash
-        // let mut hasher = Blake2sHasher::new();
-        // hasher.update(&bytes);
-        // let mut digest_bytes = hasher.finalize().0.to_vec();
+        // Best block hash (32-byte big-endian value -> 8 u32 words).
+        words.extend(split_bytes_into_words(&self.best_block_hash.0));
 
-        // // Reverse bytes in each 4-byte chunk, to comply with Cairo's little-endian encoding
-        // digest_bytes.chunks_exact_mut(4).for_each(|chunk| {
-        //     chunk.reverse();
-        // });
-        // let res = format!("0x{}", hex::encode(digest_bytes));
-        // Ok(res)
+        // Current target (u256 encoded as 32-byte big-endian value).
+        words.extend(split_bytes_into_words(&self.current_target.0));
+
+        // Previous timestamps.
+        words.extend(self.prev_timestamps.iter().copied());
+
+        // PoW target history: each target is a 32-byte big-endian u256.
+        for target in &self.pow_target_history {
+            words.extend(split_bytes_into_words(&target.0));
+        }
+
+        // Epoch start time.
+        words.push(self.epoch_start_time);
+
+        // Serialize to bytes, using little-endian encoding for each word.
+        let bytes = words
+            .iter()
+            .flat_map(|word| word.to_le_bytes())
+            .collect::<Vec<_>>();
+
+        // Compute the hash
+        let mut hasher = Blake2sHasher::new();
+        hasher.update(&bytes);
+        let mut digest_bytes = hasher.finalize().0.to_vec();
+
+        // Reverse bytes in each 4-byte chunk, to comply with Cairo's little-endian encoding.
+        digest_bytes.chunks_exact_mut(4).for_each(|chunk| {
+            chunk.reverse();
+        });
+        let res = format!("0x{}", hex::encode(digest_bytes));
+        Ok(res)
     }
 }
 
@@ -198,39 +230,46 @@ fn split_bytes_into_words(bytes: &[u8]) -> Vec<u32> {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use super::*;
+    use hex::FromHex;
 
-    // #[test]
-    // fn test_chain_state_hash() {
-    //     let chain_state = ChainState {
-    //         block_height: 0,
-    //         total_work: Work::from_hex("0x100010001").unwrap(),
-    //         best_block_hash: BlockHash::from_str(
-    //             "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
-    //         )
-    //         .unwrap(),
-    //         current_target: Target::from_hex(
-    //             "0xffff0000000000000000000000000000000000000000000000000000",
-    //         )
-    //         .unwrap(),
-    //         epoch_start_time: 1231006505,
-    //         prev_timestamps: vec![1231006505],
-    //     };
-    //     let res = chain_state.blake2s_digest().unwrap();
-    //     let expected = "0x6002eaa4410bd0b15e778656f84fc895fd091827e27ce697ba4231076c70c43b";
-    //     assert_eq!(res, expected);
-    // }
+    #[test]
+    fn test_chain_state_hash() {
+        let chain_state = ChainState {
+            block_height: 0,
+            total_work: 0x2000,
+            best_block_hash: Hash::from_hex(
+                "00040fe8ec8471911baa1db1266ea15dd06b4a8a5c453883c000b031973dce08",
+            )
+            .unwrap(),
+            current_target: Target::from_hex(
+                "0007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            )
+            .unwrap(),
+            prev_timestamps: vec![1477641360],
+            epoch_start_time: 1477641360,
+            pow_target_history: vec![
+                Target::from_hex(
+                    "0007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                )
+                .unwrap();
+                17
+            ],
+        };
+        let res = chain_state.blake2s_digest().unwrap();
+        let expected =
+            "0x5f075316d513cf571854e8f4df77f22ce7bfae4c7a1b271d57d9dfb61a54e2ec";
+        assert_eq!(res, expected);
+    }
 
-    // #[test]
-    // fn test_decode_hash() {
-    //     let mut output = vec![
-    //         FieldElement::from_dec_str("336341903543133962954146260045611975739").unwrap(),
-    //         FieldElement::from_dec_str("127621031286465709630765493168293005461").unwrap(),
-    //     ];
-    //     let res = decode_hash(&mut output).unwrap();
-    //     let expected = "0x6002eaa4410bd0b15e778656f84fc895fd091827e27ce697ba4231076c70c43b";
-    //     assert_eq!(res, expected);
-    // }
+    #[test]
+    fn test_decode_hash() {
+        let mut output = vec![
+            FieldElement::from_dec_str("336341903543133962954146260045611975739").unwrap(),
+            FieldElement::from_dec_str("127621031286465709630765493168293005461").unwrap(),
+        ];
+        let res = decode_hash(&mut output).unwrap();
+        let expected = "0x6002eaa4410bd0b15e778656f84fc895fd091827e27ce697ba4231076c70c43b";
+        assert_eq!(res, expected);
+    }
 }
