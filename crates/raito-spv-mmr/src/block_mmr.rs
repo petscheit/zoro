@@ -193,23 +193,17 @@ pub fn block_header_digest(
     hasher: Arc<dyn Hasher>,
     block_header: &Header,
 ) -> anyhow::Result<String> {
-    // Question Paul: any reason this cant be the native hash logic?
+    // Question Paul: path of least resistance for now
     let hash = block_header.hash();
-    Ok(hash.encode_hex())
-    // let data = vec![
-    //     hex::encode(&block_header.version.to_consensus().to_be_bytes()),
-    //     hex::encode(&block_header.prev_blockhash.to_byte_array()),
-    //     hex::encode(&block_header.merkle_root.to_byte_array()),
-    //     hex::encode(&block_header.time.to_be_bytes()),
-    //     hex::encode(&block_header.bits.to_consensus().to_be_bytes()),
-    //     hex::encode(&block_header.nonce.to_be_bytes()),
-    // ]
-    // .into_iter()
-    // .map(|s| format!("0x{}", s))
-    // .collect();
-    // hasher
-    //     .hash(data)
-    //     .map_err(|e| anyhow::anyhow!("Failed to hash block header: {}", e))
+    let data = vec![
+        hash.encode_hex()
+    ]
+    .into_iter()
+    .map(|s: String| format!("0x{}", s))
+    .collect();
+    hasher
+        .hash(data)
+        .map_err(|e| anyhow::anyhow!("Failed to hash block header: {}", e))
 }
 
 #[cfg(test)]
