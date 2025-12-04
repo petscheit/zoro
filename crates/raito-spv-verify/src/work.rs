@@ -13,40 +13,7 @@ pub fn verify_subchain_work(
     chain_state: &ChainState,
     config: &VerifierConfig,
 ) -> anyhow::Result<()> {
-    // Question Paul: implement zcash logic here
-
-    
-    // Difficulty target is readjusted every 2016 blocks
-    // The maximum difficulty re-adjustment step is 4x.
-    // We are rewinding the chain state down to the target block height, assuming worst case scenario
-    // where the difficulty is reducing (target is increasing) by 4x every 2016 blocks
-    // let start_epoch = chain_state.block_height / 2016;
-    // let end_epoch = block_height / 2016;
-    // let mut subchain_work = BigUint::ZERO;
-    // let mut target = BigUint::from_bytes_be(&chain_state.current_target.to_be_bytes());
-
-    // for epoch in (end_epoch..=start_epoch).rev() {
-    //     let start_block = min(2016 * (epoch + 1), chain_state.block_height);
-    //     let end_block = max(2016 * epoch, block_height);
-    //     let block_span = BigUint::from(start_block - end_block);
-    //     let block_work = compute_work_from_target(&target);
-    //     subchain_work += block_work * block_span;
-    //     target *= BigUint::from(4_u32);
-    // }
-
-    // let min_work = BigUint::from_str(&config.min_work).unwrap();
-    // if subchain_work < min_work {
-    //     anyhow::bail!(
-    //         "Subchain work is less than the minimum work: {} < {}",
-    //         subchain_work,
-    //         min_work
-    //     );
-    // }
-
-    // info!(
-    //     "Subchain work is sufficient: 0x{:x} >= 0x{:x}",
-    //     subchain_work, min_work
-    // );
+    // ToDo!!
     Ok(())
 }
 
