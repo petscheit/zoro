@@ -1,4 +1,4 @@
-use raito_zcash_client::ZcashClient;
+use zcash_client::ZcashClient;
 #[tokio::test]
 async fn zcash_client_main_flow_like_example() {
     // Same parameters as `crates/raito-bitcoin-client/src/main.rs`

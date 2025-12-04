@@ -14,8 +14,8 @@ crate-type = ["cdylib"]
 raito-spv-verify = { path = "../raito-spv-verify" }
 raito-spv-mmr = { path = "../raito-spv-mmr" }
 
-# Bitcoin types
-bitcoin = { workspace = true }
+# Zcash types
+zebra-chain.workspace = true
 
 # Stwo-cairo
 cairo-air = { git = "https://github.com/maciejka/stwo-cairo", rev = "e5981958234c4b28fa2b4c3368a0290ec3fc57c2", default-features = false, features = ["std"] }

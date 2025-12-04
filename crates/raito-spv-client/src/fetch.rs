@@ -7,7 +7,7 @@ use bitcoin::{consensus, MerkleBlock, Txid};
 use bzip2::read::BzDecoder;
 use bzip2::write::BzEncoder;
 use bzip2::Compression;
-use raito_bitcoin_client::ZcashClient;
+use zcash_client::ZcashClient;
 use raito_spv_mmr::block_mmr::BlockInclusionProof;
 use std::io::Read;
 use tracing::info;

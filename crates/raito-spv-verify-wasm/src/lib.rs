@@ -1,7 +1,6 @@
 //! WASM bindings for raito SPV verification
 //! This crate provides WebAssembly bindings for SPV proof verification
 
-use bitcoin::block::Header;
 use raito_spv_mmr::block_mmr::BlockInclusionProof;
 use raito_spv_verify::ChainState;
 use raito_spv_verify::{
@@ -78,7 +77,7 @@ pub async fn verify_block_header(
     block_header_proof_data: &str,
 ) -> Result<String, JsValue> {
     // Parse block header from JSON
-    let block_header: Header = serde_json::from_str(block_header_data)
+    let block_header: zebra_chain::block::Header = serde_json::from_str(block_header_data)
         .map_err(|e| JsValue::from_str(&format!("Failed to parse block header: {}", e)))?;
 
     // Parse block header proof from JSON
