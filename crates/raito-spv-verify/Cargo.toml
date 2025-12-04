@@ -9,9 +9,11 @@ anyhow = { workspace = true }
 # Core SPV functionality
 raito-spv-mmr = { path = "../raito-spv-mmr" }
 
-# Bitcoin types
-bitcoin = { workspace = true }
+# Zcash types
+zebra-chain.workspace = true
 
+# Zcash client
+zcash-client = { path = "../zcash-client" }
 # Logging
 tracing = "0.1"
 

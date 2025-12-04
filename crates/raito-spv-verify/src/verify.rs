@@ -1,13 +1,14 @@
 //! Verification routines for compressed SPV proofs, including transaction, block MMR,
 //! Cairo recursive proof, and subchain work checks.
 
-use bitcoin::{block::Header as BlockHeader, consensus, MerkleBlock, Transaction};
 use cairo_air::utils::{get_verification_output, VerificationOutput};
 use cairo_air::{CairoProof, PreProcessedTraceVariant};
 use raito_spv_mmr::block_mmr::{BlockInclusionProof, BlockMMR};
 use serde::{Deserialize, Serialize};
 use stwo_prover::core::vcs::blake2_merkle::Blake2sMerkleHasher;
 use tracing::info;
+use zebra_chain::block::Header;
+use zebra_chain::transaction::Transaction;
 
 use crate::proof::{BootloaderOutput, ChainState, TaskResult};
 use crate::work::verify_subchain_work;
@@ -98,35 +99,36 @@ pub async fn verify_proof(
 /// Verify that `transaction` is included in `block_header` using the provided Merkle proof.
 pub fn verify_transaction(
     transaction: &Transaction,
-    block_header: &BlockHeader,
+    block_header: &Header,
     transaction_proof: Vec<u8>,
 ) -> anyhow::Result<()> {
-    let merkle_block = MerkleBlock {
-        header: block_header.clone(),
-        txn: consensus::deserialize(&transaction_proof)?,
-    };
+    unimplemented!();
+    // let merkle_block = MerkleBlock {
+    //     header: block_header.clone(),
+    //     txn: consensus::deserialize(&transaction_proof)?,
+    // };
 
-    let mut matches = Vec::new();
-    let mut indexes = Vec::new();
-    merkle_block.extract_matches(&mut matches, &mut indexes)?;
+    // let mut matches = Vec::new();
+    // let mut indexes = Vec::new();
+    // merkle_block.extract_matches(&mut matches, &mut indexes)?;
 
-    if matches.len() != 1 {
-        anyhow::bail!("Expected 1 transaction match");
-    }
+    // if matches.len() != 1 {
+    //     anyhow::bail!("Expected 1 transaction match");
+    // }
 
-    let txid = transaction.compute_txid();
-    if txid != matches[0] {
-        anyhow::bail!("Transaction ID mismatch");
-    }
+    // let txid = transaction.compute_txid();
+    // if txid != matches[0] {
+    //     anyhow::bail!("Transaction ID mismatch");
+    // }
 
-    Ok(())
+    // Ok(())
 }
 
 /// Verify that `block_header` is included in the block MMR using the supplied inclusion proof.
 ///
 /// Returns the computed block MMR root on success.
 pub async fn verify_block_header(
-    block_header: &BlockHeader,
+    block_header: &Header,
     block_header_proof: BlockInclusionProof,
 ) -> anyhow::Result<String> {
     let BlockInclusionProof {
