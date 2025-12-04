@@ -26,12 +26,12 @@ struct Cli {
     /// RPC server host
     #[arg(long, default_value = "127.0.0.1:5000")]
     rpc_host: String,
-    /// Bitcoin RPC URL
-    #[arg(long, env = "BITCOIN_RPC")]
-    bitcoin_rpc_url: String,
-    /// Bitcoin RPC user:password (optional)
+    /// Zcash RPC URL
+    #[arg(long, env = "ZCASH_RPC")]
+    zcash_rpc_url: String,
+    /// Zcash RPC user:password (optional)
     #[arg(long, env = "USERPWD")]
-    bitcoin_rpc_userpwd: Option<String>,
+    zcash_rpc_userpwd: Option<String>,
     /// Path to the database storing the app state
     #[arg(long, default_value = "./.mmr_data/mmr.db")]
     db_path: PathBuf,
@@ -71,8 +71,8 @@ async fn main() {
     let shutdown = Shutdown::default();
 
     let indexer_config = IndexerConfig {
-        rpc_url: cli.bitcoin_rpc_url.clone(),
-        rpc_userpwd: cli.bitcoin_rpc_userpwd.clone(),
+        rpc_url: cli.zcash_rpc_url.clone(),
+        rpc_userpwd: cli.zcash_rpc_userpwd.clone(),
         mmr_id: cli.mmr_id.clone(),
         mmr_db_path: cli.db_path.clone(),
         indexing_lag: cli.mmr_block_lag,
@@ -83,8 +83,8 @@ async fn main() {
         rpc_host: cli.rpc_host,
         mmr_id: cli.mmr_id,
         mmr_db_path: cli.db_path.clone(),
-        rpc_url: cli.bitcoin_rpc_url.clone(),
-        rpc_userpwd: cli.bitcoin_rpc_userpwd.clone(),
+        rpc_url: cli.zcash_rpc_url.clone(),
+        rpc_userpwd: cli.zcash_rpc_userpwd.clone(),
     };
     let rpc_server = RpcServer::new(rpc_config, shutdown.subscribe());
 

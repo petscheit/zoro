@@ -7,7 +7,7 @@ use raito_spv_mmr::block_mmr::BlockMMR;
 use tokio::sync::broadcast;
 use tracing::{error, info};
 
-use raito_bitcoin_client::ZcashClient;
+use zcash_client::ZcashClient;
 
 use crate::{chain_state::ChainStateManager, store::AppStore};
 
@@ -72,8 +72,9 @@ impl Indexer {
                 res = bitcoin_client.wait_block_header(next_block_height, self.config.indexing_lag) => {
                     match res {
                         Ok((block_header, block_hash)) => {
+
                             store.begin().await?;
-                            mmr.add_block_header(&block_header).await.map_err(|e| anyhow::anyhow!("Failed to add block header to MMR: {}", e))?;
+                            // mmr.add_block_header(&block_header).await.map_err(|e| anyhow::anyhow!("Failed to add block header to MMR: {}", e))?;
                             chain_state_mgr.update(next_block_height, &block_header).await.map_err(|e| anyhow::anyhow!("Failed to update chain state: {}", e))?;
                             store.commit().await?;
                             info!("Block #{} {} processed", next_block_height, block_hash);

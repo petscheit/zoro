@@ -9,7 +9,8 @@ accumulators.workspace = true
 # Core SPV functionality
 raito-spv-mmr = { path = "../raito-spv-mmr", features = ["sqlite"] }
 # Bitcoin client
-raito-bitcoin-client = { path = "../raito-bitcoin-client" }
+zcash-client = { path = "../zcash-client" }
+zebra-chain.workspace = true
 raito-spv-verify = { path = "../raito-spv-verify" }
 # Async runtime
 tokio.workspace = true
@@ -19,7 +20,7 @@ axum = "0.7"
 tower-http = { version = "0.5", features = ["trace", "cors", "compression-gzip"] }
 
 # Bitcoin RPC and types (re-exported from raito-spv-mmr but needed for specific features)
-bitcoin.workspace = true
+
 # Storage
 sqlx.workspace = true
 bincode.workspace = true

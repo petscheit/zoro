@@ -1,7 +1,7 @@
 //! HTTP RPC server providing REST endpoints for MMR proof generation and block count queries.
 
 use accumulators::hasher::stark_blake::StarkBlakeHasher;
-use raito_bitcoin_client::ZcashClient;
+use zcash_client::ZcashClient;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tracing::{error, info};
@@ -13,10 +13,10 @@ use axum::{
     Json, Router,
 };
 use serde::Deserialize;
+use zebra_chain::block::Header;
 use std::{path::PathBuf, str::FromStr, sync::Arc};
 use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
 
-use bitcoin::{block::Header as BlockHeader, consensus, MerkleBlock};
 use raito_spv_mmr::{
     block_mmr::{BlockInclusionProof, BlockMMR},
     sparse_roots::SparseRoots,
@@ -213,7 +213,7 @@ pub async fn get_head(State(state): State<AppState>) -> Result<Json<u32>, Status
 pub async fn get_block_header(
     State(state): State<AppState>,
     Path(block_height): Path<u32>,
-) -> Result<Json<BlockHeader>, StatusCode> {
+) -> Result<Json<Header>, StatusCode> {
     let block_header = state
         .store
         .get_block_headers(block_height, 1)
@@ -242,7 +242,7 @@ pub async fn get_block_header(
 pub async fn get_block_headers(
     State(state): State<AppState>,
     Query(query): Query<BlockHeadersQuery>,
-) -> Result<Json<Vec<BlockHeader>>, StatusCode> {
+) -> Result<Json<Vec<Header>>, StatusCode> {
     let offset = query.offset.unwrap_or(0);
     let size = query.size.unwrap_or(10);
     let block_headers = state
@@ -269,51 +269,52 @@ pub async fn get_transaction_proof(
     State(state): State<AppState>,
     Path(tx_id): Path<String>,
 ) -> Result<Json<TransactionInclusionProof>, StatusCode> {
-    let txid = bitcoin::Txid::from_str(&tx_id).map_err(|_| StatusCode::BAD_REQUEST)?;
-    let MerkleBlock {
-        header: block_header,
-        txn,
-    } = state
-        .bitcoin_client
-        .get_transaction_inclusion_proof(&txid)
-        .await
-        .map_err(|e| {
-            error!(
-                "Failed to fetch transaction proof for txid {}: {}",
-                tx_id, e
-            );
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    unimplemented!();
+    // let txid = bitcoin::Txid::from_str(&tx_id).map_err(|_| StatusCode::BAD_REQUEST)?;
+    // let MerkleBlock {
+    //     header: block_header,
+    //     txn,
+    // } = state
+    //     .bitcoin_client
+    //     .get_transaction_inclusion_proof(&txid)
+    //     .await
+    //     .map_err(|e| {
+    //         error!(
+    //             "Failed to fetch transaction proof for txid {}: {}",
+    //             tx_id, e
+    //         );
+    //         StatusCode::INTERNAL_SERVER_ERROR
+    //     })?;
 
-    let block_hash = block_header.block_hash();
-    let block_height = state
-        .store
-        .get_block_height(&block_hash)
-        .await
-        .map_err(|e| {
-            error!(
-                "Failed to get block height for block hash {}: {}",
-                block_hash, e
-            );
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    // let block_hash = block_header.block_hash();
+    // let block_height = state
+    //     .store
+    //     .get_block_height(&block_hash)
+    //     .await
+    //     .map_err(|e| {
+    //         error!(
+    //             "Failed to get block height for block hash {}: {}",
+    //             block_hash, e
+    //         );
+    //         StatusCode::INTERNAL_SERVER_ERROR
+    //     })?;
 
-    let transaction = state
-        .bitcoin_client
-        .get_transaction(&txid, &block_hash)
-        .await
-        .map_err(|e| {
-            error!("Failed to get transaction for txid {}: {}", tx_id, e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    // let transaction = state
+    //     .bitcoin_client
+    //     .get_transaction(&txid, &block_hash)
+    //     .await
+    //     .map_err(|e| {
+    //         error!("Failed to get transaction for txid {}: {}", tx_id, e);
+    //         StatusCode::INTERNAL_SERVER_ERROR
+    //     })?;
 
-    let transaction_proof = TransactionInclusionProof {
-        transaction,
-        transaction_proof: consensus::encode::serialize(&txn),
-        block_header,
-        block_height,
-    };
-    Ok(Json(transaction_proof.into()))
+    // let transaction_proof = TransactionInclusionProof {
+    //     transaction,
+    //     transaction_proof: consensus::encode::serialize(&txn),
+    //     block_header,
+    //     block_height,
+    // };
+    // Ok(Json(transaction_proof.into()))
 }
 
 /// Get the chain state for a specific block height

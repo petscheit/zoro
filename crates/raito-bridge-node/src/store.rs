@@ -4,9 +4,6 @@ use std::path::Path;
 
 use accumulators::store::{sqlite::SQLiteStore, Store as AccumulatorsStore, StoreError};
 use async_trait::async_trait;
-use bitcoin::block::Header as BlockHeader;
-use bitcoin::consensus::{Decodable, Encodable};
-use bitcoin::BlockHash;
 use raito_spv_verify::ChainState;
 use sqlx::sqlite::{
     SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous,
@@ -14,6 +11,10 @@ use sqlx::sqlite::{
 };
 use sqlx::{Row, TransactionManager};
 use tokio::fs;
+use zebra_chain::block::Header;
+use zebra_chain::serialization::ZcashDeserialize;
+use zebra_chain::block::Hash;
+use zebra_chain::serialization::ZcashSerialize;
 
 use crate::chain_state::ChainStateStore;
 
@@ -130,16 +131,17 @@ impl ChainStateStore for AppStore {
     async fn add_block_header(
         &self,
         height: u32,
-        block_header: &BlockHeader,
+        block_header: &Header,
     ) -> Result<(), StoreError> {
-        let mut block_header_data = Vec::new();
         let mut conn = self.0.acquire_connection().await?;
-        block_header
-            .consensus_encode(&mut block_header_data)
+
+        let mut block_header_data = Vec::new();
+        block_header.zcash_serialize(&mut block_header_data)
             .map_err(|e| StoreError::Custom(Box::new(e)))?;
+
         sqlx::query("INSERT INTO block_headers (height, hash, header) VALUES (?, ?, ?)")
             .bind(height)
-            .bind(block_header.block_hash().to_string())
+            .bind(block_header.hash().to_string())
             .bind(block_header_data)
             .execute(conn.deref_mut())
             .await?;
@@ -151,7 +153,7 @@ impl ChainStateStore for AppStore {
         &self,
         start_height: u32,
         num_blocks: u32,
-    ) -> Result<Vec<BlockHeader>, StoreError> {
+    ) -> Result<Vec<Header>, StoreError> {
         let mut conn = self.0.acquire_connection().await?;
         let rows = sqlx::query("SELECT header FROM block_headers WHERE height >= ? AND height < ?")
             .bind(start_height)
@@ -161,14 +163,14 @@ impl ChainStateStore for AppStore {
         rows.iter()
             .map(|row| {
                 let header: Vec<u8> = row.get("header");
-                BlockHeader::consensus_decode(&mut header.as_slice())
+                Header::zcash_deserialize(&mut header.as_slice())
                     .map_err(|e| StoreError::Custom(Box::new(e)))
             })
             .collect()
     }
 
     /// Get the height of a block by its hash
-    async fn get_block_height(&self, block_hash: &BlockHash) -> Result<u32, StoreError> {
+    async fn get_block_height(&self, block_hash: &Hash) -> Result<u32, StoreError> {
         let mut conn = self.0.acquire_connection().await?;
         let row = sqlx::query("SELECT height FROM block_headers WHERE hash = ?")
             .bind(block_hash.to_string())

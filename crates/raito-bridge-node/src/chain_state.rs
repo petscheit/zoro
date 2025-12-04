@@ -1,13 +1,12 @@
 use std::str::FromStr;
 use std::sync::Arc;
-
+use hex::FromHex;
 use accumulators::store::StoreError;
 use async_trait::async_trait;
-use bitcoin::block::BlockHash;
-use bitcoin::block::Header as BlockHeader;
-use bitcoin::Target;
-use bitcoin::Work;
+
 use raito_spv_verify::ChainState;
+use zebra_chain::block::Header;
+use zebra_chain::block::Hash;
 
 const BLOCKS_PER_EPOCH: u32 = 2016;
 
@@ -16,14 +15,14 @@ pub trait ChainStateStore: Send + Sync {
     async fn add_block_header(
         &self,
         height: u32,
-        block_header: &BlockHeader,
+        block_header: &Header,
     ) -> Result<(), StoreError>;
     async fn get_block_headers(
         &self,
         start_height: u32,
         num_blocks: u32,
-    ) -> Result<Vec<BlockHeader>, StoreError>;
-    async fn get_block_height(&self, block_hash: &BlockHash) -> Result<u32, StoreError>;
+    ) -> Result<Vec<Header>, StoreError>;
+    async fn get_block_height(&self, block_hash: &Hash) -> Result<u32, StoreError>;
     async fn add_chain_state(
         &self,
         height: u32,
@@ -56,28 +55,31 @@ impl ChainStateManager {
     pub async fn update(
         &mut self,
         block_height: u32,
-        block_header: &BlockHeader,
+        block_header: &Header,
     ) -> Result<(), anyhow::Error> {
         let new_state = if block_height == 0 {
             self.current_state.clone()
         } else {
             let mut prev_timestamps = self.current_state.prev_timestamps.clone();
-            prev_timestamps.push(block_header.time);
+            prev_timestamps.push(block_header.time.timestamp() as u32);
             if prev_timestamps.len() > 11 {
                 prev_timestamps.remove(0);
             }
 
             let epoch_start_time = if block_height % BLOCKS_PER_EPOCH == 0 {
-                block_header.time
+                block_header.time.timestamp() as u32
             } else {
                 self.current_state.epoch_start_time
             };
+            
 
+            let n_bits = u32::from_be_bytes(block_header.difficulty_threshold.bytes_in_display_order());
+        
             ChainState {
                 block_height,
-                total_work: self.current_state.total_work + block_header.work(),
-                best_block_hash: block_header.block_hash(),
-                current_target: block_header.target(),
+                total_work: self.current_state.total_work, // + block_header.difficulty_threshold, // Question Paul: how do we compute this?
+                best_block_hash: block_header.hash(),
+                n_bits,
                 epoch_start_time,
                 prev_timestamps,
             }
@@ -95,17 +97,14 @@ impl ChainStateManager {
     pub fn genesis_state() -> ChainState {
         ChainState {
             block_height: 0,
-            total_work: Work::from_hex("0x100010001").unwrap(),
-            best_block_hash: BlockHash::from_str(
-                "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
+            total_work: 0x2000,
+            best_block_hash: Hash::from_hex(
+                "0000000000000000000000000000000000000000000000000000000000000000",
             )
             .unwrap(),
-            current_target: Target::from_hex(
-                "0xffff0000000000000000000000000000000000000000000000000000",
-            )
-            .unwrap(),
-            epoch_start_time: 1231006505,
-            prev_timestamps: vec![1231006505],
+            n_bits: 0x1f07ffff,
+            epoch_start_time: 1477634160,
+            prev_timestamps: vec![1477634160],
         }
     }
 }
