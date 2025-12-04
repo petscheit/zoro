@@ -1,5 +1,4 @@
-use raito_bitcoin_client::ZcashClient;
-
+use raito_zcash_client::ZcashClient;
 #[tokio::test]
 async fn zcash_client_main_flow_like_example() {
     // Same parameters as `crates/raito-bitcoin-client/src/main.rs`
@@ -90,14 +89,13 @@ async fn zcash_client_get_transaction_test() {
 
     for txid_hex in txids_hex {
         let transaction = client
-            .get_transaction(&txid_hex.as_slice().clone())
+            .get_transaction(&txid_hex.as_slice())
             .await
             .expect("get_transaction failed");
 
-        let mut expected_txid: Vec<u8> = vec![];
-        transaction.txid().write(&mut expected_txid).unwrap();
+        let mut expected_txid = transaction.hash().0;
         expected_txid.reverse();
 
-        assert_eq!(expected_txid, txid_hex.as_slice().clone());
+        assert_eq!(expected_txid, txid_hex.as_slice());
     }
 }

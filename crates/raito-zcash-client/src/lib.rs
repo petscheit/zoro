@@ -5,17 +5,14 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient};
 use jsonrpsee::rpc_params;
-use serde::{Deserialize, Serialize};
+use zebra_chain::block::Header;
+use zebra_chain::transaction::Transaction;
+use zebra_chain::block::Hash;
+use zebra_chain::serialization::ZcashDeserialize;
 use serde::de::DeserializeOwned;
-use serde_json::Value;
 use std::time::Duration;
 use thiserror::Error;
 use tracing::{debug, info};
-use zcash_primitives::block::{BlockHash, BlockHeader};
-use zcash_primitives::transaction::Transaction as ZcashTransaction;
-use zcash_protocol::consensus::{BlockHeight, BranchId};
-use zcash_protocol::{consensus::Network, TxId};
-pub mod types;
 
 
 /// Error types for Bitcoin RPC client operations
@@ -30,6 +27,9 @@ pub enum ZcashClientError {
     /// Failed to decode hex response
     #[error("Failed to decode hex response: {0}")]
     HexDecode(#[from] hex::FromHexError),
+    /// Failed to deserialize Zcash block header
+    #[error("Failed to deserialize Zcash block header: {0}")]
+    ZcashBlockHeaderDeserialize(#[from] zebra_chain::serialization::SerializationError),
     /// Failed to read Zcash block header
     #[error("Failed to read Zcash block header: {0}")]
     ZcashBlockHeaderRead(#[from] std::io::Error),
@@ -55,7 +55,6 @@ pub struct ZcashClient {
     client: HttpClient,
     chain_height: u32,
     backoff: backoff::ExponentialBackoff,
-    network: Network,
 }
 
 impl ZcashClient {
@@ -78,38 +77,11 @@ impl ZcashClient {
 
         let backoff = backoff::ExponentialBackoff::default();
 
-        let chain_info = Self::get_chain_info(client.clone(), backoff.clone()).await?;
-        let network = match chain_info["chain"].as_str().unwrap_or("unknown") {
-            "main" => Network::MainNetwork,
-            "test" => Network::TestNetwork,
-            _ => {
-                return Err(ZcashClientError::UnsupportedNetwork(
-                    "unknown network".to_string(),
-                ))
-            }
-        };
-
         Ok(Self {
             client,
             backoff: backoff.clone(),
-            network,
-            chain_height: chain_info["blocks"].as_u64().unwrap_or(0) as u32,
+            chain_height: 0
         })
-    }
-
-    /// Get chain info, needed to determine the network
-    async fn get_chain_info(
-        client: HttpClient,
-        backoff: backoff::ExponentialBackoff,
-    ) -> Result<Value, ZcashClientError> {
-        let blockchain_info: Value = request_with_retry(backoff, || async {
-            client
-                .request("getblockchaininfo", rpc_params![])
-                .await
-                .map_err(Into::into)
-        })
-        .await?;
-        Ok(blockchain_info)
     }
 
     async fn request<T: DeserializeOwned>(
@@ -127,33 +99,32 @@ impl ZcashClient {
     }
 
     /// Get block hash by height
-    pub async fn get_block_hash(&self, height: u32) -> Result<BlockHash, ZcashClientError> {
+    pub async fn get_block_hash(&self, height: u32) -> Result<Hash, ZcashClientError> {
         self.request::<String>("getblockhash", rpc_params![height])
             .await
             .and_then(|s| {
                 let mut bytes = hex::decode(&s)?;
-                bytes.reverse(); // we need to reverse endianness to match rpc
-                BlockHash::try_from_slice(&bytes)
-                    .ok_or_else(|| ZcashClientError::InvalidBlockHash(s))
+                bytes.reverse();
+                Hash::zcash_deserialize(&mut bytes.as_slice()).map_err(Into::into)
             })
     }
 
     /// Get block header by hash
     pub async fn get_block_header(
         &self,
-        hash: &BlockHash,
-    ) -> Result<BlockHeader, ZcashClientError> {
+        hash: &Hash,
+    ) -> Result<Header, ZcashClientError> {
         self.request::<String>("getblockheader", rpc_params![hash.to_string(), false])
             .await
             .and_then(|header_hex| {
                 let header_bytes = hex::decode(header_hex)?;
                 let mut reader = header_bytes.as_slice();
-                BlockHeader::read(&mut reader).map_err(Into::into)
+                Header::zcash_deserialize(&mut reader).map_err(Into::into)
             })
     }
 
     /// Get block height by hash
-    pub async fn get_block_height(&self, hash: &BlockHash) -> Result<u32, ZcashClientError> {
+    pub async fn get_block_height(&self, hash: &Hash) -> Result<u32, ZcashClientError> {
         let header_info: serde_json::Value = self
             .request("getblockheader", rpc_params![hash.to_string(), true])
             .await?;
@@ -165,7 +136,7 @@ impl ZcashClient {
     pub async fn get_block_header_by_height(
         &self,
         height: u32,
-    ) -> Result<(BlockHeader, BlockHash), ZcashClientError> {
+    ) -> Result<(Header, Hash), ZcashClientError> {
         let hash = self.get_block_hash(height).await?;
         let header = self.get_block_header(&hash).await?;
         Ok((header, hash))
@@ -173,25 +144,13 @@ impl ZcashClient {
 
     /// Get transaction by txid and hash of the block containing the transaction
     pub async fn get_transaction(&self, txid: &[u8]) -> Result<Transaction, ZcashClientError> {
-        // we need to pass the txid in little endian format to the rpc
-        let mut txid_le = [0u8; 32];
-        txid_le.copy_from_slice(txid);
-        txid_le.reverse();
-        let txid = TxId::read(&mut txid_le.as_slice()).unwrap();
-
         // get raw tx from rpc in json mode
-        let tx: Value = self
-            .request("getrawtransaction", rpc_params![txid.to_string(), 1])
+        let tx: String = self
+            .request("getrawtransaction", rpc_params![hex::encode(txid)])
             .await?;
 
-        // derive branch if from network + block height to decode tx version correctly
-        let block_number: u32 = tx["height"].as_u64().unwrap() as u32;
-        let consensus_branch_id =
-            BranchId::for_height(&self.network, BlockHeight::from(block_number));
-
-        // decode tx from hex
-        let tx_hex = hex::decode(tx["hex"].as_str().unwrap()).unwrap();
-        let transaction = Transaction::read(&mut tx_hex.as_slice(), consensus_branch_id).unwrap();
+        let tx_bytes = hex::decode(tx).unwrap();
+        let transaction = Transaction::zcash_deserialize(&mut tx_bytes.as_slice()).unwrap();
 
         Ok(transaction)
     }
@@ -199,7 +158,7 @@ impl ZcashClient {
     /// Get transaction inclusion proof
     pub async fn get_transaction_inclusion_proof(
         &self,
-        _txid: &TxId,
+        _txid: &[u8]
     ) -> Result<(), ZcashClientError> {
         unimplemented!();
         // self.request("gettxoutproof", rpc_params![[txid.to_string()]])
@@ -218,7 +177,7 @@ impl ZcashClient {
         &mut self,
         height: u32,
         lag: u32,
-    ) -> Result<(BlockHeader, BlockHash), ZcashClientError> {
+    ) -> Result<(Header, Hash), ZcashClientError> {
         while height > self.chain_height {
             self.chain_height = self.get_chain_height().await?.saturating_sub(lag);
             if height <= self.chain_height {

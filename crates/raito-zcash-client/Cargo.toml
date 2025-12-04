@@ -5,8 +5,7 @@ edition = "2021"
 
 [dependencies]
 # Zcash types
-zcash_primitives = { workspace = true }
-zcash_protocol = { workspace = true }
+zebra-chain.workspace = true
 
 # RPC client
 jsonrpsee = { workspace = true }

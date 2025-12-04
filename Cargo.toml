@@ -7,7 +7,7 @@ cairo-vm = { git = "https://github.com/maciejka/cairo-vm", rev = "19d8a07ce9799a
 
 [workspace.dependencies]
 # Accumulators
-accumulators = { version = "0.5.1", features = ["blake", "memory", "mmr"]}
+accumulators = { version = "0.5.1", features = ["blake", "memory", "mmr", "sqlite"]}
 
 # Async runtime
 tokio = { version = "1.36", features = ["full"] }
@@ -17,6 +17,7 @@ async-trait = "0.1"
 # zcash
 zcash_primitives = { version = "0.26.1" }
 zcash_protocol = { version = "0.7.1" }
+zebra-chain = {version = "3.1.0"}
 bitcoin = { version = "0.32.6", features = ["serde"] }
 bitcoincore-rpc-json = "0.19.0"
 

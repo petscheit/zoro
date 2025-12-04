@@ -16,25 +16,32 @@ async fn main() {
 
     println!("tx: {tx:?}");
 
-    let hash = tx.txid();
+    let hash = tx.hash();
     println!("hash: {hash}");
 
-    // let hash = client.get_block_hash(3156073).await.unwrap();
+    let hash = client.get_block_hash(3156073).await.unwrap();
+    println!("hash: {hash}");
 
-    // println!("hash: {hash}");
-    // let header = client.get_block_header(&hash).await.unwrap();
+    let header = client.get_block_header(&hash).await.unwrap();
+    println!("header: {header:?}");
 
-    // println!("got header! hash: {}", header.hash());
+    assert_eq!(hash, header.hash());
 
-    // let height = client.get_block_height(&hash).await.unwrap();
+    println!("hash: {hash}");
+    let header = client.get_block_header(&hash).await.unwrap();
 
-    // println!("height: {height}");
 
-    // let header_by_height = client.get_block_header_by_height(height).await.unwrap();
+    println!("got header! hash: {}", header.hash());
 
-    // println!("header_by_height: {}", header_by_height.0.hash());
+    let height = client.get_block_height(&hash).await.unwrap();
 
-    // let chain_height = client.get_chain_height().await.unwrap();
+    println!("height: {height}");
 
-    // println!("chain_height: {chain_height}");
+    let header_by_height = client.get_block_header_by_height(height).await.unwrap();
+
+    println!("header_by_height: {}", header_by_height.0.hash());
+
+    let chain_height = client.get_chain_height().await.unwrap();
+
+    println!("chain_height: {chain_height}");
 }
