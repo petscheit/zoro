@@ -13,7 +13,7 @@ use serde::de::DeserializeOwned;
 use std::time::Duration;
 use thiserror::Error;
 use tracing::{debug, info};
-
+pub mod serialize;
 
 /// Error types for Bitcoin RPC client operations
 #[derive(Error, Debug)]
